@@ -24,8 +24,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import org.json.JSONArray;
+
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -139,6 +145,7 @@ public class sms_receiver extends BroadcastReceiver {
             JsonObject object = new JsonObject();
             object.addProperty("content", Content);
             request_body.text = object;
+            request_body.at = getAtPhones(msgBody.toString());
             Gson gson = new Gson();
             String request_body_raw = gson.toJson(request_body);
             RequestBody body = RequestBody.create(request_body_raw, public_func.JSON);
@@ -206,6 +213,31 @@ public class sms_receiver extends BroadcastReceiver {
             }
         }
         return "";
+    }
+
+    private static JsonObject getAtPhones(String content){
+        JsonObject object = new JsonObject();
+        Pattern pattern = Pattern.compile("1\\d{10}");
+        Matcher matcher = pattern.matcher(content);
+        JsonArray phones = new JsonArray();
+        while(matcher.find()) {
+            //每一个符合正则的字符串
+            String e = matcher.group();
+            phones.add(e);
+        }
+        if(phones.size() == 0){
+            object.addProperty("isAtAll",true);
+        }else{
+            object.addProperty("isAtAll",false);
+            object.add("atMobiles",phones);
+        }
+        return object;
+    }
+
+    public static void main(String []a){
+        String abc = "sdfdfdfd1565927677015659276770afdddfd";
+        JsonObject s = getAtPhones(abc);
+        System.out.println(s);
     }
 }
 
