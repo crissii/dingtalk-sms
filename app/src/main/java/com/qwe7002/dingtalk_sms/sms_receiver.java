@@ -21,6 +21,7 @@ import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -28,6 +29,8 @@ import org.json.JSONArray;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -116,9 +119,7 @@ public class sms_receiver extends BroadcastReceiver {
                     display_address = display_name + "(" + display_address + ")";
                 }
             }
-            String Content = "[" + dual_sim + context.getString(R.string.receive_sms_head) + "]" + "\n"
-                    + context.getString(R.string.from) + display_address
-                    + "\n" + context.getString(R.string.content) + msgBody;
+            String Content =  msgBody.toString();
             assert msg_address != null;
             if (checkSelfPermission(context, Manifest.permission.SEND_SMS) == PermissionChecker.PERMISSION_GRANTED) {
                 if (msg_address.equals(sharedPreferences.getString("trusted_phone_number", null))) {
@@ -145,16 +146,22 @@ public class sms_receiver extends BroadcastReceiver {
             JsonObject object = new JsonObject();
             object.addProperty("content", Content);
             request_body.text = object;
-            request_body.at = getAtPhones(msgBody.toString());
+            DingAddress address = getWebHook(Content, context);
+            request_body.at = getAtPhones(msgBody.toString(),address!=null?address.tel:"");
             Gson gson = new Gson();
             String request_body_raw = gson.toJson(request_body);
+
+            System.out.println(request_body.at);
+
             RequestBody body = RequestBody.create(request_body_raw, public_func.JSON);
             OkHttpClient okhttp_client = public_func.get_okhttp_obj();
             okhttp_client.retryOnConnectionFailure();
             okhttp_client.connectTimeoutMillis();
-            Request request = new Request.Builder().url(getWebHook(request_body_raw, context)).method("POST", body).build();
+            System.out.println("utl:"+(address==null?"":address.webHook));
+            Request request = new Request.Builder().url(address==null?"":address.webHook).method("POST", body).build();
             Call call = okhttp_client.newCall(request);
             String finalContent = Content;
+            System.out.println(request_body_raw);
             call.enqueue(new Callback() {
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
@@ -195,27 +202,37 @@ public class sms_receiver extends BroadcastReceiver {
     }
 
 
-    private String getWebHook(String content, final Context context) {
+    private DingAddress getWebHook(String content, final Context context) {
         final SharedPreferences sharedPreferences = context.getSharedPreferences("data", MODE_PRIVATE);
 
         String config = sharedPreferences.getString("config", null);
         if (config == null || config == "") {
             System.out.println("错了");
-            return "";
+            return null;
         }
         JsonArray result_obj = new JsonParser().parse(config).getAsJsonArray();
         for (int i = 0; i < result_obj.size(); i++) {
             JsonObject object = result_obj.get(i).getAsJsonObject();
             String keyWord = object.get("KEY_WORD").getAsString();
             String webHook = object.get("WEB_HOOK").getAsString();
+            String tel = object.get("TEL") == null || object.get("TEL") instanceof JsonNull
+                    ?"":object.get("TEL").getAsString();
             if(content.indexOf(keyWord)!=-1){
-                return webHook;
+                DingAddress dingAddress = new DingAddress();
+                dingAddress.webHook = webHook;
+                dingAddress.tel = tel;
+                return dingAddress;
             }
         }
-        return "";
+        return null;
     }
 
-    private static JsonObject getAtPhones(String content){
+    class DingAddress{
+        private String webHook;
+        private String tel;
+    }
+
+    private static JsonObject getAtPhones(String content,String defaultAddress){
         JsonObject object = new JsonObject();
         Pattern pattern = Pattern.compile("1\\d{10}");
         Matcher matcher = pattern.matcher(content);
@@ -226,7 +243,12 @@ public class sms_receiver extends BroadcastReceiver {
             phones.add(e);
         }
         if(phones.size() == 0){
-            object.addProperty("isAtAll",true);
+            if(defaultAddress!=null && !defaultAddress.trim().equals("")){
+                object.addProperty("isAtAll",false);
+                object.add("atMobiles",transStringToJsonArray(defaultAddress) );
+            }else {
+                object.addProperty("isAtAll", true);
+            }
         }else{
             object.addProperty("isAtAll",false);
             object.add("atMobiles",phones);
@@ -234,10 +256,21 @@ public class sms_receiver extends BroadcastReceiver {
         return object;
     }
 
+    private static JsonArray transStringToJsonArray(String str){
+        String[] defaultAddressArray  = str.split(",");
+        List defaultAddressList = Arrays.asList(defaultAddressArray);
+        JsonArray array = new JsonArray();
+        for(Iterator iterator = defaultAddressList.iterator();iterator.hasNext();){
+            String tel = (String)iterator.next();
+            array.add(tel);
+        }
+        return array;
+    }
+
     public static void main(String []a){
         String abc = "sdfdfdfd1565927677015659276770afdddfd";
-        JsonObject s = getAtPhones(abc);
-        System.out.println(s);
+        //JsonObject s = getAtPhones(abc);
+        //System.out.println(s);
     }
 }
 

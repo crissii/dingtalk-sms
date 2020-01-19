@@ -7,6 +7,8 @@ android {
         applicationId "com.qwe7002.dingtalk_sms"
         minSdkVersion 22
         targetSdkVersion 29
+        versionCode 2
+        versionName "1.0"
     }
 
     compileOptions {
@@ -32,6 +34,13 @@ android {
         }
     }
     buildToolsVersion = '29.0.2'
+    android.applicationVariants.all {
+        variant ->
+            variant.outputs.all {
+                // 此处指定生成的apk文件名
+                outputFileName = "dingtail-sms.apk"
+            }
+    }
 }
 
 dependencies {
